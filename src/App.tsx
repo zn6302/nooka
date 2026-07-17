@@ -5,6 +5,7 @@ import Home from './pages/Home'
 import Modes from './pages/Modes'
 import Analytics from './pages/Analytics'
 import Settings from './pages/Settings'
+import WorkRestCycle from './pages/WorkRestCycle'
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
             <Route path="/modes" element={<Modes />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/settings/work-cycle" element={<WorkRestCycle />} />
           </Route>
         </Routes>
       </HashRouter>

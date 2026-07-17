@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useState } from 'react'
+import { useEffect, useMemo, useReducer, useState } from 'react'
 import type { Mode } from '../modes'
 import { useApp } from '../store'
 import { Card, PageHeader } from '../components/ui'

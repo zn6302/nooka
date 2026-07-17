@@ -34,6 +34,12 @@ interface AppState {
   setTransparency: (v: number) => void
   ledOn: boolean
   setLedOn: (v: boolean) => void
+  workMinutes: number
+  setWorkMinutes: (v: number) => void
+  restMinutes: number
+  setRestMinutes: (v: number) => void
+  cycleReminder: boolean
+  setCycleReminder: (v: boolean) => void
   suggestionDismissed: boolean
   dismissSuggestion: () => void
   // Transparency authorization range (shared with Settings)
@@ -82,6 +88,9 @@ const saveState = (state: {
   usageMs: UsageMs
   switchCount: number
   dailyUsages: DailyUsage[]
+  workMinutes: number
+  restMinutes: number
+  cycleReminder: boolean
 }) => {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
@@ -107,6 +116,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const [modeId, setModeIdRaw] = useState<ModeId>('focus')
   const [ledOn, setLedOn] = useState(true)
+  const [workMinutes, setWorkMinutes] = useState(savedState?.workMinutes ?? 50)
+  const [restMinutes, setRestMinutes] = useState(savedState?.restMinutes ?? 10)
+  const [cycleReminder, setCycleReminder] = useState(savedState?.cycleReminder ?? true)
   const [suggestionDismissed, setSuggestionDismissed] = useState(false)
 
   // Authorization range for transparency
@@ -147,7 +159,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Usage tracking: settled ms per mode, count of switches, and when the
   // current mode was entered (so we can add its live duration on read)
   const [usageMs, setUsageMs] = useState<UsageMs>(savedState?.usageMs ?? zeroUsage)
-  const [switchCount, setSwitchCount] = useState(savedState?.switchCount ?? 0)
+  const [switchCount, setSwitchCount] = useState<number>(savedState?.switchCount ?? 0)
   const enteredAt = useRef(Date.now())
 
   // Fold the current mode's elapsed time into settled usage, resetting the clock
@@ -210,8 +222,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Auto-save state to localStorage
   useEffect(() => {
-    saveState({ minTransparency, maxTransparency, modeColors, events, usageMs, switchCount, dailyUsages })
-  }, [minTransparency, maxTransparency, modeColors, events, usageMs, switchCount, dailyUsages])
+    saveState({ minTransparency, maxTransparency, modeColors, events, usageMs, switchCount, dailyUsages, workMinutes, restMinutes, cycleReminder })
+  }, [minTransparency, maxTransparency, modeColors, events, usageMs, switchCount, dailyUsages, workMinutes, restMinutes, cycleReminder])
 
   // Modes with custom colors applied, so the whole app reflects the chosen LED color
   const modes = useMemo(
@@ -229,6 +241,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setTransparency,
         ledOn,
         setLedOn,
+        workMinutes,
+        setWorkMinutes,
+        restMinutes,
+        setRestMinutes,
+        cycleReminder,
+        setCycleReminder,
         suggestionDismissed,
         dismissSuggestion: () => setSuggestionDismissed(true),
         minTransparency,
