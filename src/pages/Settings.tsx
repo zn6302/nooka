@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Bluetooth,
   BluetoothOff,
@@ -68,7 +69,7 @@ function ToggleRow({
 }
 
 export default function Settings() {
-  const { ledOn, setLedOn } = useApp()
+  const { ledOn, setLedOn, workMinutes, restMinutes } = useApp()
   const [paired, setPaired] = useState(false)
   const [defaultMode, setDefaultMode] = useState<ModeId>('focus')
   const [hrv, setHrv] = useState(true)
@@ -115,8 +116,8 @@ export default function Settings() {
         icon={<SlidersHorizontal size={15} className="text-brand" />}
         title="個人化設定"
       >
-        <button
-          type="button"
+        <Link
+          to="/settings/work-cycle"
           className="flex w-full items-center gap-3 border-t border-black/5 px-5 py-3.5 text-left"
         >
           <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-app">
@@ -124,10 +125,12 @@ export default function Settings() {
           </div>
           <div className="flex-1">
             <p className="text-[14px] font-bold">工作與休息週期</p>
-            <p className="pt-0.5 text-[12px] text-muted">專注 50 分 / 休息 10 分</p>
+            <p className="pt-0.5 text-[12px] text-muted">
+              專注 {workMinutes} 分 / 休息 {restMinutes} 分
+            </p>
           </div>
           <ChevronRight size={16} className="text-faint" />
-        </button>
+        </Link>
 
         <p className="border-t border-black/5 px-5 pb-1 pt-3 text-[12px] text-muted">
           預設模式（啟動時套用）
@@ -207,9 +210,9 @@ export default function Settings() {
         <input
           type="range"
           min={0}
-          max={maxT - 5}
+          max={100}
           value={minT}
-          onChange={(e) => setMinT(Number(e.target.value))}
+          onChange={(e) => setMinT(Math.min(Number(e.target.value), maxT))}
           className="mt-2 h-2 w-full cursor-pointer appearance-none rounded-full"
           style={{
             background: `linear-gradient(to right, #6db08b ${minT}%, #eae8e1 ${minT}%)`,
@@ -223,10 +226,10 @@ export default function Settings() {
         </div>
         <input
           type="range"
-          min={minT + 5}
+          min={0}
           max={100}
           value={maxT}
-          onChange={(e) => setMaxT(Number(e.target.value))}
+          onChange={(e) => setMaxT(Math.max(Number(e.target.value), minT))}
           className="mt-2 h-2 w-full cursor-pointer appearance-none rounded-full"
           style={{
             background: `linear-gradient(to right, #3c7a58 ${maxT}%, #eae8e1 ${maxT}%)`,

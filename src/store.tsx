@@ -8,6 +8,12 @@ interface AppState {
   setTransparency: (v: number) => void
   ledOn: boolean
   setLedOn: (v: boolean) => void
+  workMinutes: number
+  setWorkMinutes: (v: number) => void
+  restMinutes: number
+  setRestMinutes: (v: number) => void
+  cycleReminder: boolean
+  setCycleReminder: (v: boolean) => void
   suggestionDismissed: boolean
   dismissSuggestion: () => void
 }
@@ -18,6 +24,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [modeId, setModeIdRaw] = useState<ModeId>('focus')
   const [transparency, setTransparency] = useState(modeById('focus').defaultTransparency)
   const [ledOn, setLedOn] = useState(true)
+  const [workMinutes, setWorkMinutes] = useState(50)
+  const [restMinutes, setRestMinutes] = useState(10)
+  const [cycleReminder, setCycleReminder] = useState(true)
   const [suggestionDismissed, setSuggestionDismissed] = useState(false)
 
   const setModeId = (id: ModeId) => {
@@ -34,6 +43,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setTransparency,
         ledOn,
         setLedOn,
+        workMinutes,
+        setWorkMinutes,
+        restMinutes,
+        setRestMinutes,
+        cycleReminder,
+        setCycleReminder,
         suggestionDismissed,
         dismissSuggestion: () => setSuggestionDismissed(true),
       }}
