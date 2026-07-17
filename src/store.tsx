@@ -1,5 +1,7 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
 import { MODES, modeById, type Mode, type ModeId } from './modes'
+
+type UsageMs = Record<ModeId, number>
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
@@ -37,7 +39,17 @@ interface AppState {
   // Activity log
   events: AppEvent[]
   addEvent: (kind: EventKind, text: string) => void
+  // Usage analytics
+  switchCount: number
+  // Settled usage per mode plus the live time in the current mode, in ms
+  getUsage: () => UsageMs
 }
+
+const zeroUsage = (): UsageMs =>
+  MODES.reduce((acc, m) => {
+    acc[m.id] = 0
+    return acc
+  }, {} as UsageMs)
 
 const nowHHMM = () => {
   const d = new Date()
@@ -79,7 +91,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTransparencyRaw((t) => clamp(t, minTransparency, v))
   }
 
+  // Usage tracking: settled ms per mode, count of switches, and when the
+  // current mode was entered (so we can add its live duration on read)
+  const [usageMs, setUsageMs] = useState<UsageMs>(zeroUsage)
+  const [switchCount, setSwitchCount] = useState(0)
+  const enteredAt = useRef(Date.now())
+
+  // Fold the current mode's elapsed time into settled usage, resetting the clock
+  const settleCurrent = () => {
+    const now = Date.now()
+    const elapsed = now - enteredAt.current
+    enteredAt.current = now
+    setUsageMs((prev) => ({ ...prev, [modeId]: prev[modeId] + elapsed }))
+    return elapsed
+  }
+
+  const getUsage = (): UsageMs => ({
+    ...usageMs,
+    [modeId]: usageMs[modeId] + (Date.now() - enteredAt.current),
+  })
+
   const setModeId = (id: ModeId) => {
+    if (id !== modeId) {
+      settleCurrent()
+      setSwitchCount((n) => n + 1)
+    }
     setModeIdRaw(id)
     setTransparencyRaw(clamp(modeById(id).defaultTransparency, minTransparency, maxTransparency))
   }
@@ -120,6 +156,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         mode,
         events,
         addEvent,
+        switchCount,
+        getUsage,
       }}
     >
       {children}

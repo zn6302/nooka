@@ -1,31 +1,39 @@
-import { useState } from 'react'
+import { useEffect, useReducer, useState } from 'react'
 import type { Mode } from '../modes'
 import { useApp } from '../store'
 import { Card, PageHeader } from '../components/ui'
 
 const DAYS = ['一', '二', '三', '四', '五', '六', '日']
 
-// hours per mode per day: [focus, open, meeting, recovery]
-const USAGE: [number, number, number, number][] = [
-  [3, 1, 1, 0.5],
-  [3.5, 1, 1, 0.5],
-  [2.5, 0.5, 0.5, 0.5],
-  [3.5, 1.5, 0.5, 0.5],
-  [3, 1, 2, 0.5],
-  [2, 1, 0.5, 1],
-  [1.5, 1, 0, 1],
-]
+// JS getDay(): Sun=0..Sat=6  →  our week is Mon-first, so Mon=0..Sun=6
+const todayIndex = () => (new Date().getDay() + 6) % 7
 
-const fmt = (h: number) => (Number.isInteger(h) ? `${h}h` : `${h.toFixed(1)}h`)
+// ms → hours
+const toHours = (ms: number) => ms / 3_600_000
+
+// Compact duration label: hours once past 1h, otherwise minutes
+const fmt = (h: number) => {
+  if (h >= 1) return `${h.toFixed(1)}h`
+  const mins = Math.round(h * 60)
+  return `${mins} 分`
+}
 
 function DonutChart({ modes, totals, total }: { modes: Mode[]; totals: number[]; total: number }) {
   const r = 44
   const c = 2 * Math.PI * r
   let offset = 0
+  if (total <= 0) {
+    return (
+      <svg viewBox="0 0 120 120" className="size-[120px] -rotate-90">
+        <circle cx="60" cy="60" r={r} fill="none" stroke="#eae8e1" strokeWidth="16" />
+      </svg>
+    )
+  }
   return (
     <svg viewBox="0 0 120 120" className="size-[120px] -rotate-90">
       {modes.map((m, i) => {
         const frac = totals[i] / total
+        if (frac <= 0) return null
         const seg = (
           <circle
             key={m.id}
@@ -48,15 +56,33 @@ function DonutChart({ modes, totals, total }: { modes: Mode[]; totals: number[];
 }
 
 export default function Analytics() {
-  const { modes } = useApp()
-  const [selectedDay, setSelectedDay] = useState(4)
+  const { modes, getUsage, switchCount } = useApp()
 
-  const day = USAGE[selectedDay]
+  // Refresh every 30s so the live time in the current mode keeps ticking up
+  const [, tick] = useReducer((n) => n + 1, 0)
+  useEffect(() => {
+    const id = setInterval(tick, 30_000)
+    return () => clearInterval(id)
+  }, [])
+
+  const today = todayIndex()
+  const [selectedDay, setSelectedDay] = useState(today)
+
+  // Real usage (hours) for today, keyed by mode order in `modes`
+  const usage = getUsage()
+  const todayHours = modes.map((m) => toHours(usage[m.id]))
+
+  // Week view: today holds real data, other days are empty for now
+  const week: number[][] = DAYS.map((_, i) => (i === today ? todayHours : modes.map(() => 0)))
+
+  const day = week[selectedDay]
   const dayTotal = day.reduce((a, b) => a + b, 0)
-  const modeTotals = modes.map((_, i) => USAGE.reduce((sum, d) => sum + d[i], 0))
+  const modeTotals = modes.map((_, i) => week.reduce((sum, d) => sum + d[i], 0))
   const weekTotal = modeTotals.reduce((a, b) => a + b, 0)
-  const maxDay = Math.max(...USAGE.map((d) => d.reduce((a, b) => a + b, 0)))
-  const switches = 23
+  const maxDay = Math.max(1e-9, ...week.map((d) => d.reduce((a, b) => a + b, 0)))
+
+  const topIdx = modeTotals.reduce((best, v, i) => (v > modeTotals[best] ? i : best), 0)
+  const topMode = weekTotal > 0 ? modes[topIdx] : null
 
   return (
     <div className="flex flex-col gap-4">
@@ -69,15 +95,15 @@ export default function Analytics() {
         </p>
         <div className="grid grid-cols-3 gap-3 pt-3">
           <div className="text-center">
-            <p className="font-mono text-[20px] font-medium leading-7">{weekTotal}h</p>
+            <p className="font-mono text-[20px] font-medium leading-7">{fmt(weekTotal)}</p>
             <p className="pt-0.5 text-[12px] text-white/65">使用時長</p>
           </div>
           <div className="text-center">
-            <p className="font-mono text-[20px] font-medium leading-7">Focus</p>
+            <p className="font-mono text-[20px] font-medium leading-7">{topMode ? topMode.en : '—'}</p>
             <p className="pt-0.5 text-[12px] text-white/65">最常使用</p>
           </div>
           <div className="text-center">
-            <p className="font-mono text-[20px] font-medium leading-7">{switches} 次</p>
+            <p className="font-mono text-[20px] font-medium leading-7">{switchCount} 次</p>
             <p className="pt-0.5 text-[12px] text-white/65">切換次數</p>
           </div>
         </div>
@@ -101,7 +127,7 @@ export default function Analytics() {
           ))}
         </div>
         <div className="flex h-[130px] items-end gap-3 pt-4">
-          {USAGE.map((d, i) => {
+          {week.map((d, i) => {
             const total = d.reduce((a, b) => a + b, 0)
             return (
               <button
@@ -111,19 +137,20 @@ export default function Analytics() {
                 className="flex flex-1 flex-col items-center gap-1.5"
               >
                 <div
-                  className="flex w-4 flex-col-reverse overflow-hidden rounded-full"
-                  style={{ height: `${(total / maxDay) * 100}px` }}
+                  className="flex w-4 flex-col-reverse overflow-hidden rounded-full bg-[#f0eee9]"
+                  style={{ height: `${Math.max(4, (total / maxDay) * 100)}px` }}
                 >
-                  {modes.map((m, mi) => (
-                    <div
-                      key={m.id}
-                      style={{
-                        height: `${(d[mi] / total) * 100}%`,
-                        background: m.color,
-                        opacity: i === selectedDay ? 1 : 0.45,
-                      }}
-                    />
-                  ))}
+                  {total > 0 &&
+                    modes.map((m, mi) => (
+                      <div
+                        key={m.id}
+                        style={{
+                          height: `${(d[mi] / total) * 100}%`,
+                          background: m.color,
+                          opacity: i === selectedDay ? 1 : 0.45,
+                        }}
+                      />
+                    ))}
                 </div>
                 <span className="text-[10px] text-muted">{DAYS[i]}</span>
               </button>
@@ -133,23 +160,28 @@ export default function Analytics() {
         {/* Selected day breakdown */}
         <div className="mt-3 rounded-2xl bg-app p-3">
           <p className="text-[12px] font-semibold text-muted">
-            星期{DAYS[selectedDay]} · 共 {fmt(dayTotal)}
+            星期{DAYS[selectedDay]}
+            {selectedDay === today && ' (今日)'} · 共 {fmt(dayTotal)}
           </p>
-          <div className="flex flex-col gap-1.5 pt-2">
-            {modes.map((m, mi) => (
-              <div key={m.id} className="flex items-center gap-2">
-                <span className="size-2 rounded-full" style={{ background: m.color }} />
-                <span className="w-14 text-[12px] text-muted">{m.en}</span>
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#e7e4dc]">
-                  <div
-                    className="h-1.5 rounded-full"
-                    style={{ width: `${(day[mi] / dayTotal) * 100}%`, background: m.color }}
-                  />
+          {dayTotal <= 0 ? (
+            <p className="pt-2 text-[12px] text-muted">尚無使用紀錄</p>
+          ) : (
+            <div className="flex flex-col gap-1.5 pt-2">
+              {modes.map((m, mi) => (
+                <div key={m.id} className="flex items-center gap-2">
+                  <span className="size-2 rounded-full" style={{ background: m.color }} />
+                  <span className="w-14 text-[12px] text-muted">{m.en}</span>
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#e7e4dc]">
+                    <div
+                      className="h-1.5 rounded-full"
+                      style={{ width: `${(day[mi] / dayTotal) * 100}%`, background: m.color }}
+                    />
+                  </div>
+                  <span className="w-10 text-right font-mono text-[12px]">{fmt(day[mi])}</span>
                 </div>
-                <span className="w-8 text-right font-mono text-[12px]">{fmt(day[mi])}</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </Card>
 
@@ -163,11 +195,9 @@ export default function Analytics() {
               <div key={m.id} className="flex items-center gap-2">
                 <span className="size-2.5 rounded-full" style={{ background: m.color }} />
                 <span className="text-[12px] text-muted">{m.name}</span>
-                <span className="font-mono text-[12px] font-medium">
-                  {modeTotals[i].toFixed(1)}h
-                </span>
+                <span className="font-mono text-[12px] font-medium">{fmt(modeTotals[i])}</span>
                 <span className="flex-1 text-right text-[12px] text-muted">
-                  {Math.round((modeTotals[i] / weekTotal) * 100)}%
+                  {weekTotal > 0 ? Math.round((modeTotals[i] / weekTotal) * 100) : 0}%
                 </span>
               </div>
             ))}
