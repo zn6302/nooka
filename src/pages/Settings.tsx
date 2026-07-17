@@ -16,7 +16,7 @@ import {
   Bell,
   Shield,
 } from 'lucide-react'
-import { MODES, type ModeId } from '../modes'
+import { type ModeId } from '../modes'
 import { useApp } from '../store'
 import { Card, PageHeader, Toggle } from '../components/ui'
 
@@ -68,14 +68,20 @@ function ToggleRow({
 }
 
 export default function Settings() {
-  const { ledOn, setLedOn } = useApp()
+  const {
+    ledOn,
+    setLedOn,
+    modes,
+    minTransparency: minT,
+    maxTransparency: maxT,
+    setMinTransparency: setMinT,
+    setMaxTransparency: setMaxT,
+  } = useApp()
   const [paired, setPaired] = useState(false)
   const [defaultMode, setDefaultMode] = useState<ModeId>('focus')
   const [hrv, setHrv] = useState(true)
   const [standing, setStanding] = useState(true)
   const [calendar, setCalendar] = useState(true)
-  const [minT, setMinT] = useState(20)
-  const [maxT, setMaxT] = useState(95)
   const [notifyMode, setNotifyMode] = useState(true)
   const [notifyBt, setNotifyBt] = useState(true)
   const [notifyRange, setNotifyRange] = useState(true)
@@ -132,7 +138,7 @@ export default function Settings() {
         <p className="border-t border-black/5 px-5 pb-1 pt-3 text-[12px] text-muted">
           預設模式（啟動時套用）
         </p>
-        {MODES.map((m) => {
+        {modes.map((m) => {
           const Icon = m.icon
           const selected = m.id === defaultMode
           return (
