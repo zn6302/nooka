@@ -1,5 +1,18 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
-import { modeById, type ModeId } from './modes'
+import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
+import { MODES, modeById, type Mode, type ModeId } from './modes'
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
+
+type ModeColors = Record<ModeId, string>
+
+export type EventKind = 'mode' | 'transparency' | 'led'
+
+export interface AppEvent {
+  id: number
+  kind: EventKind
+  text: string
+  time: string // HH:MM
+}
 
 interface AppState {
   modeId: ModeId
@@ -10,20 +23,81 @@ interface AppState {
   setLedOn: (v: boolean) => void
   suggestionDismissed: boolean
   dismissSuggestion: () => void
+  // Transparency authorization range (shared with Settings)
+  minTransparency: number
+  maxTransparency: number
+  setMinTransparency: (v: number) => void
+  setMaxTransparency: (v: number) => void
+  // Per-mode custom LED colors
+  modeColors: ModeColors
+  setModeColor: (id: ModeId, color: string) => void
+  // Mode with its current (possibly customized) color applied
+  modes: Mode[]
+  mode: Mode
+  // Activity log
+  events: AppEvent[]
+  addEvent: (kind: EventKind, text: string) => void
+}
+
+const nowHHMM = () => {
+  const d = new Date()
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
 const AppContext = createContext<AppState | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [modeId, setModeIdRaw] = useState<ModeId>('focus')
-  const [transparency, setTransparency] = useState(modeById('focus').defaultTransparency)
   const [ledOn, setLedOn] = useState(true)
   const [suggestionDismissed, setSuggestionDismissed] = useState(false)
 
+  // Authorization range for transparency
+  const [minTransparency, setMinTransparencyRaw] = useState(20)
+  const [maxTransparency, setMaxTransparencyRaw] = useState(95)
+
+  const [transparency, setTransparencyRaw] = useState(() =>
+    clamp(modeById('focus').defaultTransparency, 20, 95),
+  )
+
+  // Custom LED colors, keyed by mode id; defaults to each mode's built-in color
+  const [modeColors, setModeColors] = useState<ModeColors>(() =>
+    MODES.reduce((acc, m) => {
+      acc[m.id] = m.color
+      return acc
+    }, {} as ModeColors),
+  )
+
+  const setTransparency = (v: number) => setTransparencyRaw(clamp(v, minTransparency, maxTransparency))
+
+  const setMinTransparency = (v: number) => {
+    setMinTransparencyRaw(v)
+    setTransparencyRaw((t) => clamp(t, v, maxTransparency))
+  }
+
+  const setMaxTransparency = (v: number) => {
+    setMaxTransparencyRaw(v)
+    setTransparencyRaw((t) => clamp(t, minTransparency, v))
+  }
+
   const setModeId = (id: ModeId) => {
     setModeIdRaw(id)
-    setTransparency(modeById(id).defaultTransparency)
+    setTransparencyRaw(clamp(modeById(id).defaultTransparency, minTransparency, maxTransparency))
   }
+
+  const setModeColor = (id: ModeId, color: string) =>
+    setModeColors((prev) => ({ ...prev, [id]: color }))
+
+  // Activity log — newest first
+  const [events, setEvents] = useState<AppEvent[]>([])
+  const addEvent = (kind: EventKind, text: string) =>
+    setEvents((prev) => [{ id: prev.length ? prev[0].id + 1 : 1, kind, text, time: nowHHMM() }, ...prev])
+
+  // Modes with custom colors applied, so the whole app reflects the chosen LED color
+  const modes = useMemo(
+    () => MODES.map((m) => ({ ...m, color: modeColors[m.id], chipTextColor: modeColors[m.id] })),
+    [modeColors],
+  )
+  const mode = useMemo(() => modes.find((m) => m.id === modeId)!, [modes, modeId])
 
   return (
     <AppContext.Provider
@@ -36,6 +110,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setLedOn,
         suggestionDismissed,
         dismissSuggestion: () => setSuggestionDismissed(true),
+        minTransparency,
+        maxTransparency,
+        setMinTransparency,
+        setMaxTransparency,
+        modeColors,
+        setModeColor,
+        modes,
+        mode,
+        events,
+        addEvent,
       }}
     >
       {children}
