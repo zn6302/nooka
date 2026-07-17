@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { MODES } from '../modes'
+import type { Mode } from '../modes'
+import { useApp } from '../store'
 import { Card, PageHeader } from '../components/ui'
 
 const DAYS = ['一', '二', '三', '四', '五', '六', '日']
@@ -17,13 +18,13 @@ const USAGE: [number, number, number, number][] = [
 
 const fmt = (h: number) => (Number.isInteger(h) ? `${h}h` : `${h.toFixed(1)}h`)
 
-function DonutChart({ totals, total }: { totals: number[]; total: number }) {
+function DonutChart({ modes, totals, total }: { modes: Mode[]; totals: number[]; total: number }) {
   const r = 44
   const c = 2 * Math.PI * r
   let offset = 0
   return (
     <svg viewBox="0 0 120 120" className="size-[120px] -rotate-90">
-      {MODES.map((m, i) => {
+      {modes.map((m, i) => {
         const frac = totals[i] / total
         const seg = (
           <circle
@@ -47,11 +48,12 @@ function DonutChart({ totals, total }: { totals: number[]; total: number }) {
 }
 
 export default function Analytics() {
+  const { modes } = useApp()
   const [selectedDay, setSelectedDay] = useState(4)
 
   const day = USAGE[selectedDay]
   const dayTotal = day.reduce((a, b) => a + b, 0)
-  const modeTotals = MODES.map((_, i) => USAGE.reduce((sum, d) => sum + d[i], 0))
+  const modeTotals = modes.map((_, i) => USAGE.reduce((sum, d) => sum + d[i], 0))
   const weekTotal = modeTotals.reduce((a, b) => a + b, 0)
   const maxDay = Math.max(...USAGE.map((d) => d.reduce((a, b) => a + b, 0)))
   const switches = 23
@@ -112,7 +114,7 @@ export default function Analytics() {
                   className="flex w-4 flex-col-reverse overflow-hidden rounded-full"
                   style={{ height: `${(total / maxDay) * 100}px` }}
                 >
-                  {MODES.map((m, mi) => (
+                  {modes.map((m, mi) => (
                     <div
                       key={m.id}
                       style={{
@@ -134,7 +136,7 @@ export default function Analytics() {
             星期{DAYS[selectedDay]} · 共 {fmt(dayTotal)}
           </p>
           <div className="flex flex-col gap-1.5 pt-2">
-            {MODES.map((m, mi) => (
+            {modes.map((m, mi) => (
               <div key={m.id} className="flex items-center gap-2">
                 <span className="size-2 rounded-full" style={{ background: m.color }} />
                 <span className="w-14 text-[12px] text-muted">{m.en}</span>
@@ -155,9 +157,9 @@ export default function Analytics() {
       <Card className="p-5">
         <p className="text-[14px] font-bold">本週模式分佈</p>
         <div className="flex items-center gap-1.5 pt-3">
-          <DonutChart totals={modeTotals} total={weekTotal} />
+          <DonutChart modes={modes} totals={modeTotals} total={weekTotal} />
           <div className="flex flex-1 flex-col gap-3 pl-2">
-            {MODES.map((m, i) => (
+            {modes.map((m, i) => (
               <div key={m.id} className="flex items-center gap-2">
                 <span className="size-2.5 rounded-full" style={{ background: m.color }} />
                 <span className="text-[12px] text-muted">{m.name}</span>
