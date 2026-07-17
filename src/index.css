@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Nunito", "Noto Sans TC", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, monospace;
+
+  --color-app: #f4f3ef;
+  --color-ink: #18181a;
+  --color-muted: #76756f;
+  --color-faint: #c8c5be;
+  --color-track: #eae8e1;
+  --color-brand: #3c7a58;
+
+  --color-focus: #d65a57;
+  --color-focus-soft: #fef0f0;
+  --color-open: #6db08b;
+  --color-open-soft: #ebf4ee;
+  --color-meeting: #3d5fa8;
+  --color-meeting-soft: #eef2fa;
+  --color-recovery: #8a5a9a;
+  --color-recovery-deep: #7a4a8a;
+  --color-recovery-soft: #f3eef9;
+}
+
+html,
+body {
+  background: #e9e7e1;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
