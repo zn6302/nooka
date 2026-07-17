@@ -1,4 +1,4 @@
-import { CircleCheck, Sparkles, X } from 'lucide-react'
+import { Sparkles, X } from 'lucide-react'
 import { useApp } from '../store'
 import { PageHeader } from '../components/ui'
 
@@ -75,7 +75,6 @@ export default function Home() {
                     {mode.desc}
                   </p>
                 </div>
-                {active && <CircleCheck size={20} color="#fff" className="shrink-0" />}
               </div>
             </button>
           )
