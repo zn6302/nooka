@@ -56,7 +56,7 @@ function DonutChart({ modes, totals, total }: { modes: Mode[]; totals: number[];
 }
 
 export default function Analytics() {
-  const { modes, getUsage, switchCount } = useApp()
+  const { modes, getUsage, switchCount, dailyUsages } = useApp()
 
   // Refresh every 30s so the live time in the current mode keeps ticking up
   const [, tick] = useReducer((n) => n + 1, 0)
@@ -68,12 +68,31 @@ export default function Analytics() {
   const today = todayIndex()
   const [selectedDay, setSelectedDay] = useState(today)
 
-  // Real usage (hours) for today, keyed by mode order in `modes`
-  const usage = getUsage()
-  const todayHours = modes.map((m) => toHours(usage[m.id]))
+  // Build week view from dailyUsages and current data
+  const week = useMemo(() => {
+    const result: number[][] = DAYS.map(() => modes.map(() => 0))
+    const now = new Date()
+    const startOfWeek = new Date(now)
+    startOfWeek.setDate(now.getDate() - today)
 
-  // Week view: today holds real data, other days are empty for now
-  const week: number[][] = DAYS.map((_, i) => (i === today ? todayHours : modes.map(() => 0)))
+    // Fill in past days from dailyUsages
+    dailyUsages.forEach((daily) => {
+      const d = new Date(daily.date)
+      const dayIndex = (d.getDay() + 6) % 7
+      if (dayIndex >= 0 && dayIndex < 7) {
+        modes.forEach((m, i) => {
+          result[dayIndex][i] = toHours(daily.usage[m.id] ?? 0)
+        })
+      }
+    })
+
+    // Today gets real-time data
+    const usage = getUsage()
+    const todayHours = modes.map((m) => toHours(usage[m.id]))
+    result[today] = todayHours
+
+    return result
+  }, [modes, dailyUsages, getUsage, today])
 
   const day = week[selectedDay]
   const dayTotal = day.reduce((a, b) => a + b, 0)

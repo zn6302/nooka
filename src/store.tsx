@@ -1,7 +1,14 @@
-import { createContext, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useMemo, useRef, useState, useEffect, type ReactNode } from 'react'
 import { MODES, modeById, type Mode, type ModeId } from './modes'
 
 type UsageMs = Record<ModeId, number>
+
+// Daily usage snapshot for analytics
+export interface DailyUsage {
+  date: string // YYYY-MM-DD
+  usage: UsageMs
+  switchCount: number
+}
 
 // Default transparency authorization range (%)
 const DEFAULT_MIN_TRANSPARENCY = 20
@@ -49,6 +56,8 @@ interface AppState {
   switchCount: number
   // Settled usage per mode plus the live time in the current mode, in ms
   getUsage: () => UsageMs
+  // Daily usage history for analytics
+  dailyUsages: DailyUsage[]
 }
 
 const zeroUsage = (): UsageMs =>
@@ -62,27 +71,64 @@ const nowHHMM = () => {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
+// localStorage helpers
+const STORAGE_KEY = 'nooka-app-state'
+
+const saveState = (state: {
+  minTransparency: number
+  maxTransparency: number
+  modeColors: ModeColors
+  events: AppEvent[]
+  usageMs: UsageMs
+  switchCount: number
+  dailyUsages: DailyUsage[]
+}) => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  } catch (e) {
+    console.error('Failed to save state:', e)
+  }
+}
+
+const loadState = () => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    return saved ? JSON.parse(saved) : null
+  } catch (e) {
+    console.error('Failed to load state:', e)
+    return null
+  }
+}
+
 const AppContext = createContext<AppState | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const savedState = loadState()
+
   const [modeId, setModeIdRaw] = useState<ModeId>('focus')
   const [ledOn, setLedOn] = useState(true)
   const [suggestionDismissed, setSuggestionDismissed] = useState(false)
 
   // Authorization range for transparency
-  const [minTransparency, setMinTransparencyRaw] = useState(DEFAULT_MIN_TRANSPARENCY)
-  const [maxTransparency, setMaxTransparencyRaw] = useState(DEFAULT_MAX_TRANSPARENCY)
+  const [minTransparency, setMinTransparencyRaw] = useState(
+    savedState?.minTransparency ?? DEFAULT_MIN_TRANSPARENCY,
+  )
+  const [maxTransparency, setMaxTransparencyRaw] = useState(
+    savedState?.maxTransparency ?? DEFAULT_MAX_TRANSPARENCY,
+  )
 
   const [transparency, setTransparencyRaw] = useState(() =>
-    clamp(modeById('focus').defaultTransparency, DEFAULT_MIN_TRANSPARENCY, DEFAULT_MAX_TRANSPARENCY),
+    clamp(modeById('focus').defaultTransparency, minTransparency, maxTransparency),
   )
 
   // Custom LED colors, keyed by mode id; defaults to each mode's built-in color
-  const [modeColors, setModeColors] = useState<ModeColors>(() =>
-    MODES.reduce((acc, m) => {
-      acc[m.id] = m.color
-      return acc
-    }, {} as ModeColors),
+  const [modeColors, setModeColors] = useState<ModeColors>(
+    savedState?.modeColors ??
+      (() =>
+        MODES.reduce((acc, m) => {
+          acc[m.id] = m.color
+          return acc
+        }, {} as ModeColors))(),
   )
 
   const clampTransparency = (v: number) => clamp(v, minTransparency, maxTransparency)
@@ -100,8 +146,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Usage tracking: settled ms per mode, count of switches, and when the
   // current mode was entered (so we can add its live duration on read)
-  const [usageMs, setUsageMs] = useState<UsageMs>(zeroUsage)
-  const [switchCount, setSwitchCount] = useState(0)
+  const [usageMs, setUsageMs] = useState<UsageMs>(savedState?.usageMs ?? zeroUsage)
+  const [switchCount, setSwitchCount] = useState(savedState?.switchCount ?? 0)
   const enteredAt = useRef(Date.now())
 
   // Fold the current mode's elapsed time into settled usage, resetting the clock
@@ -131,9 +177,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setModeColors((prev) => ({ ...prev, [id]: color }))
 
   // Activity log — newest first
-  const [events, setEvents] = useState<AppEvent[]>([])
+  const [events, setEvents] = useState<AppEvent[]>(savedState?.events ?? [])
   const addEvent = (kind: EventKind, text: string) =>
     setEvents((prev) => [{ id: prev.length ? prev[0].id + 1 : 1, kind, text, time: nowHHMM() }, ...prev])
+
+  // Daily usage history for analytics
+  const [dailyUsages, setDailyUsages] = useState<DailyUsage[]>(savedState?.dailyUsages ?? [])
+
+  // Get today's date in YYYY-MM-DD format
+  const getToday = () => {
+    const d = new Date()
+    return d.toISOString().split('T')[0]
+  }
+
+  // Auto-snapshot daily usage at midnight
+  useEffect(() => {
+    const checkAndSnapshot = () => {
+      const today = getToday()
+      const existingToday = dailyUsages.find((d) => d.date === today)
+
+      // If today's snapshot doesn't exist, create it from current usage
+      if (!existingToday && Object.values(usageMs).some((ms) => ms > 0)) {
+        setDailyUsages((prev) => [...prev, { date: today, usage: { ...usageMs }, switchCount }])
+      }
+    }
+
+    checkAndSnapshot()
+    // Check every hour
+    const interval = setInterval(checkAndSnapshot, 1000 * 60 * 60)
+    return () => clearInterval(interval)
+  }, [usageMs, switchCount, dailyUsages])
+
+  // Auto-save state to localStorage
+  useEffect(() => {
+    saveState({ minTransparency, maxTransparency, modeColors, events, usageMs, switchCount, dailyUsages })
+  }, [minTransparency, maxTransparency, modeColors, events, usageMs, switchCount, dailyUsages])
 
   // Modes with custom colors applied, so the whole app reflects the chosen LED color
   const modes = useMemo(
@@ -166,6 +244,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addEvent,
         switchCount,
         getUsage,
+        dailyUsages,
       }}
     >
       {children}
