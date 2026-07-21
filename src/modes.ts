@@ -62,19 +62,3 @@ export const MODES: Mode[] = [
 ]
 
 export const modeById = (id: ModeId): Mode => MODES.find((m) => m.id === id)!
-
-// Selectable LED colors for the status light
-export const LED_COLORS = [
-  '#d65a57',
-  '#e08a3d',
-  '#e6c84a',
-  '#4fa860',
-  '#2f7d6b',
-  '#4aa8c4',
-  '#4a90d6',
-  '#3d4fa8',
-  '#8a5a9a',
-  '#c74a72',
-  '#6b4a3d',
-  '#8a8a86',
-]
