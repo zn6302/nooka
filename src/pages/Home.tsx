@@ -1,27 +1,10 @@
-import { Sparkles, X } from 'lucide-react'
+import { CircleCheck, Sparkles, X } from 'lucide-react'
+import { MODES } from '../modes'
 import { useApp } from '../store'
 import { PageHeader } from '../components/ui'
 
 export default function Home() {
-  const {
-    modeId,
-    setModeId,
-    suggestionDismissed,
-    dismissSuggestion,
-    modes,
-    clampTransparency,
-    addEvent,
-  } = useApp()
-
-  const selectMode = (id: (typeof modes)[number]['id']) => {
-    if (id === modeId) return
-    const target = modes.find((m) => m.id === id)!
-    setModeId(id)
-    addEvent(
-      'mode',
-      `切換至${target.name}，透明度調整至 ${clampTransparency(target.defaultTransparency)}%`,
-    )
-  }
+  const { modeId, setModeId, suggestionDismissed, dismissSuggestion } = useApp()
 
   return (
     <div className="flex flex-col gap-4">
@@ -31,14 +14,14 @@ export default function Home() {
       />
 
       <div className="flex flex-col gap-3">
-        {modes.map((mode) => {
+        {MODES.map((mode) => {
           const active = mode.id === modeId
           const Icon = mode.icon
           return (
             <button
               key={mode.id}
               type="button"
-              onClick={() => selectMode(mode.id)}
+              onClick={() => setModeId(mode.id)}
               className="w-full rounded-3xl text-left transition-transform active:scale-[0.98]"
               style={active ? { background: mode.color } : { background: '#fff' }}
             >
@@ -75,6 +58,7 @@ export default function Home() {
                     {mode.desc}
                   </p>
                 </div>
+                {active && <CircleCheck size={20} color="#fff" className="shrink-0" />}
               </div>
             </button>
           )
@@ -104,7 +88,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => {
-                selectMode('recovery')
+                setModeId('recovery')
                 dismissSuggestion()
               }}
               className="flex-1 rounded-[14px] bg-brand py-2 text-[12px] font-bold"

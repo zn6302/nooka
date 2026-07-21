@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Bluetooth,
@@ -17,7 +17,7 @@ import {
   Bell,
   Shield,
 } from 'lucide-react'
-import { type ModeId } from '../modes'
+import { MODES, type ModeId } from '../modes'
 import { useApp } from '../store'
 import { Card, PageHeader, Toggle } from '../components/ui'
 
@@ -68,114 +68,15 @@ function ToggleRow({
   )
 }
 
-// Dual-thumb range bar: both handles live on one track and are dragged
-// directly, so the display bar itself is the control (no separate sliders).
-// The authorized band (max − min) must always span at least this much.
-const MIN_GAP = 30
-
-function RangeBar({
-  min,
-  max,
-  onChange,
-}: {
-  min: number
-  max: number
-  onChange: (min: number, max: number) => void
-}) {
-  const trackRef = useRef<HTMLDivElement>(null)
-  const dragging = useRef<'min' | 'max' | null>(null)
-
-  const valueFromEvent = (clientX: number) => {
-    const track = trackRef.current
-    if (!track) return 0
-    const rect = track.getBoundingClientRect()
-    const ratio = (clientX - rect.left) / rect.width
-    return Math.round(Math.min(1, Math.max(0, ratio)) * 100)
-  }
-
-  const handleMove = (e: PointerEvent) => {
-    const which = dragging.current
-    if (!which) return
-    const v = valueFromEvent(e.clientX)
-    // Keep the two thumbs at least MIN_GAP apart. Once they hit that gap and
-    // the user keeps dragging, the whole band translates instead of stopping.
-    if (which === 'min') {
-      const lo = Math.max(0, Math.min(v, 100 - MIN_GAP))
-      onChange(lo, Math.max(max, lo + MIN_GAP))
-    } else {
-      const hi = Math.min(100, Math.max(v, MIN_GAP))
-      onChange(Math.min(min, hi - MIN_GAP), hi)
-    }
-  }
-
-  const stop = () => {
-    dragging.current = null
-    window.removeEventListener('pointermove', handleMove)
-    window.removeEventListener('pointerup', stop)
-  }
-
-  const startDrag = (which: 'min' | 'max') => (e: React.PointerEvent) => {
-    e.preventDefault()
-    dragging.current = which
-    window.addEventListener('pointermove', handleMove)
-    window.addEventListener('pointerup', stop)
-  }
-
-  const thumb =
-    'absolute top-1/2 size-5 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-full border-2 border-white bg-brand shadow-md active:cursor-grabbing'
-
-  return (
-    <div ref={trackRef} className="relative mt-4 h-3 select-none">
-      {/* full track */}
-      <div
-        className="absolute inset-x-0 top-1/2 h-3 -translate-y-1/2 rounded-full"
-        style={{
-          background: `linear-gradient(to right, #eae8e1 ${min}%, #d65a57 ${min}%, #3c7a58 ${max}%, #eae8e1 ${max}%)`,
-        }}
-      />
-      {/* lower-bound thumb */}
-      <div
-        role="slider"
-        aria-label="最低透明度"
-        aria-valuemin={0}
-        aria-valuemax={max - MIN_GAP}
-        aria-valuenow={min}
-        className={thumb}
-        style={{ left: `${min}%` }}
-        onPointerDown={startDrag('min')}
-      />
-      {/* upper-bound thumb */}
-      <div
-        role="slider"
-        aria-label="最高透明度"
-        aria-valuemin={min + MIN_GAP}
-        aria-valuemax={100}
-        aria-valuenow={max}
-        className={thumb}
-        style={{ left: `${max}%` }}
-        onPointerDown={startDrag('max')}
-      />
-    </div>
-  )
-}
-
 export default function Settings() {
-  const {
-    ledOn,
-    setLedOn,
-    modes,
-    minTransparency: minT,
-    maxTransparency: maxT,
-    setMinTransparency: setMinT,
-    setMaxTransparency: setMaxT,
-    workMinutes,
-    restMinutes,
-  } = useApp()
+  const { ledOn, setLedOn, workMinutes, restMinutes } = useApp()
   const [paired, setPaired] = useState(false)
   const [defaultMode, setDefaultMode] = useState<ModeId>('focus')
   const [hrv, setHrv] = useState(true)
   const [standing, setStanding] = useState(true)
   const [calendar, setCalendar] = useState(true)
+  const [minT, setMinT] = useState(20)
+  const [maxT, setMaxT] = useState(95)
   const [notifyMode, setNotifyMode] = useState(true)
   const [notifyBt, setNotifyBt] = useState(true)
   const [notifyRange, setNotifyRange] = useState(true)
@@ -234,7 +135,7 @@ export default function Settings() {
         <p className="border-t border-black/5 px-5 pb-1 pt-3 text-[12px] text-muted">
           預設模式（啟動時套用）
         </p>
-        {modes.map((m) => {
+        {MODES.map((m) => {
           const Icon = m.icon
           const selected = m.id === defaultMode
           return (
@@ -300,17 +201,49 @@ export default function Settings() {
           <Layers size={15} className="text-brand" />
           <p className="text-[14px] font-bold">數值授權範圍控制</p>
         </div>
-        <p className="pt-0.5 pl-6 text-[12px] text-muted">拖曳下方色帶兩端的圓點調整上下限</p>
+        <p className="pt-0.5 pl-6 text-[12px] text-muted">限制透明度可調整的上下限</p>
 
-        <RangeBar
-          min={minT}
-          max={maxT}
-          onChange={(lo, hi) => {
-            setMinT(lo)
-            setMaxT(hi)
+        <div className="flex items-center justify-between pt-4">
+          <p className="text-[14px] font-bold">最低透明度（下限）</p>
+          <p className="font-mono text-[14px] font-medium text-brand">{minT}%</p>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={minT}
+          onChange={(e) => setMinT(Math.min(Number(e.target.value), maxT))}
+          className="mt-2 h-2 w-full cursor-pointer appearance-none rounded-full"
+          style={{
+            background: `linear-gradient(to right, #6db08b ${minT}%, #eae8e1 ${minT}%)`,
+            accentColor: '#3c7a58',
           }}
         />
-        <div className="flex justify-between pt-3 text-[12px]">
+
+        <div className="flex items-center justify-between pt-4">
+          <p className="text-[14px] font-bold">最高透明度（上限）</p>
+          <p className="font-mono text-[14px] font-medium text-brand">{maxT}%</p>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={maxT}
+          onChange={(e) => setMaxT(Math.max(Number(e.target.value), minT))}
+          className="mt-2 h-2 w-full cursor-pointer appearance-none rounded-full"
+          style={{
+            background: `linear-gradient(to right, #3c7a58 ${maxT}%, #eae8e1 ${maxT}%)`,
+            accentColor: '#3c7a58',
+          }}
+        />
+
+        <div
+          className="mt-4 h-3 rounded-full"
+          style={{
+            background: `linear-gradient(to right, #eae8e1 ${minT}%, #d65a57 ${minT}%, #3c7a58 ${maxT}%, #eae8e1 ${maxT}%)`,
+          }}
+        />
+        <div className="flex justify-between pt-2 text-[12px]">
           <span className="text-muted">{minT}% 下限</span>
           <span className="font-bold text-brand">可調整 {maxT - minT}%</span>
           <span className="text-muted">上限 {maxT}%</span>
